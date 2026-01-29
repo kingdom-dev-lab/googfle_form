@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+        --primary: #1a73e8;
+        --border: #e0e0e0;
+        --bg: #f7f8fa;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: #1f1f1f;
+      }
+
+      .container {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        margin-bottom: 16px;
+      }
+
+      h1 {
+        font-size: 22px;
+        margin: 0 0 8px;
+      }
+
+      .description {
+        font-size: 14px;
+        color: #5f6368;
+        margin-bottom: 16px;
+      }
+
+      label {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+
+      input[type="text"], textarea {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        font-size: 16px;
+        box-sizing: border-box;
+      }
+
+      textarea {
+        min-height: 96px;
+        resize: vertical;
+      }
+
+      .button {
+        width: 100%;
+        border: none;
+        border-radius: 12px;
+        padding: 14px 16px;
+        font-size: 16px;
+        font-weight: 600;
+        background: var(--primary);
+        color: #fff;
+        cursor: pointer;
+      }
+
+      .button.secondary {
+        background: #fff;
+        color: var(--primary);
+        border: 1px solid var(--primary);
+      }
+
+      .question {
+        margin-bottom: 20px;
+      }
+
+      .question-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+
+      .help-text {
+        font-size: 13px;
+        color: #5f6368;
+        margin-bottom: 8px;
+      }
+
+      .required {
+        color: #d93025;
+        margin-left: 4px;
+      }
+
+      .options {
+        display: grid;
+        gap: 10px;
+      }
+
+      .option-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: #fff;
+      }
+
+      .scale-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(56px, 1fr));
+        gap: 10px;
+      }
+
+      .scale-button {
+        position: relative;
+      }
+
+      .scale-button input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .scale-button label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 56px;
+        border-radius: 14px;
+        border: 2px solid var(--border);
+        font-size: 18px;
+        font-weight: 700;
+        color: #202124;
+        background: #fff;
+      }
+
+      .scale-button input:checked + label {
+        border-color: var(--primary);
+        background: rgba(26, 115, 232, 0.1);
+        color: var(--primary);
+      }
+
+      .scale-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #5f6368;
+        margin-top: 6px;
+      }
+
+      .status {
+        font-size: 14px;
+        margin-top: 8px;
+      }
+
+      .status.success {
+        color: #188038;
+      }
+
+      .status.error {
+        color: #d93025;
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <h1>Google Form 手機優化填寫</h1>
+        <p class="description">貼上原本 Google Form 連結，系統會自動讀取題目並產生手機友善版本。</p>
+        <label for="formUrl">Google Form 連結</label>
+        <input id="formUrl" type="text" placeholder="https://docs.google.com/forms/d/e/.../viewform">
+        <button class="button" id="loadForm">讀取問卷</button>
+        <p class="status hidden" id="loadStatus"></p>
+      </div>
+
+      <div class="card hidden" id="formCard">
+        <h1 id="formTitle"></h1>
+        <p class="description" id="formDescription"></p>
+        <form id="formContainer"></form>
+        <button class="button" id="submitForm">送出</button>
+        <p class="status hidden" id="submitStatus"></p>
+      </div>
+    </div>
+
+    <script>
+      var formDefinition = null;
+      var loadButton = document.getElementById('loadForm');
+      var submitButton = document.getElementById('submitForm');
+      var formCard = document.getElementById('formCard');
+      var formContainer = document.getElementById('formContainer');
+      var loadStatus = document.getElementById('loadStatus');
+      var submitStatus = document.getElementById('submitStatus');
+
+      function setStatus(element, message, type) {
+        element.textContent = message;
+        element.className = 'status ' + type;
+        element.classList.remove('hidden');
+      }
+
+      function clearStatus(element) {
+        element.textContent = '';
+        element.className = 'status hidden';
+      }
+
+      function createQuestionElement(item) {
+        var wrapper = document.createElement('div');
+        wrapper.className = 'question';
+
+        var title = document.createElement('div');
+        title.className = 'question-title';
+        title.textContent = item.title;
+
+        if (item.required) {
+          var required = document.createElement('span');
+          required.className = 'required';
+          required.textContent = '*';
+          title.appendChild(required);
+        }
+
+        wrapper.appendChild(title);
+
+        if (item.helpText) {
+          var help = document.createElement('div');
+          help.className = 'help-text';
+          help.textContent = item.helpText;
+          wrapper.appendChild(help);
+        }
+
+        if (item.type === 'TEXT') {
+          var input = document.createElement('input');
+          input.type = 'text';
+          input.name = 'entry.' + item.id;
+          if (item.required) {
+            input.required = true;
+          }
+          wrapper.appendChild(input);
+        }
+
+        if (item.type === 'PARAGRAPH_TEXT') {
+          var textarea = document.createElement('textarea');
+          textarea.name = 'entry.' + item.id;
+          if (item.required) {
+            textarea.required = true;
+          }
+          wrapper.appendChild(textarea);
+        }
+
+        if (item.type === 'MULTIPLE_CHOICE') {
+          var options = document.createElement('div');
+          options.className = 'options';
+          item.options.forEach(function (option, index) {
+            var optionId = 'option-' + item.id + '-' + index;
+            var optionWrapper = document.createElement('label');
+            optionWrapper.className = 'option-item';
+
+            var radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'entry.' + item.id;
+            radio.value = option.value;
+            radio.id = optionId;
+            if (item.required) {
+              radio.required = true;
+            }
+
+            var text = document.createElement('span');
+            text.textContent = option.value;
+
+            optionWrapper.appendChild(radio);
+            optionWrapper.appendChild(text);
+            options.appendChild(optionWrapper);
+          });
+          wrapper.appendChild(options);
+        }
+
+        if (item.type === 'CHECKBOX') {
+          var checkboxGroup = document.createElement('div');
+          checkboxGroup.className = 'options';
+          item.options.forEach(function (option, index) {
+            var optionId = 'checkbox-' + item.id + '-' + index;
+            var optionWrapper = document.createElement('label');
+            optionWrapper.className = 'option-item';
+
+            var checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.name = 'entry.' + item.id;
+            checkbox.value = option.value;
+            checkbox.id = optionId;
+
+            var text = document.createElement('span');
+            text.textContent = option.value;
+
+            optionWrapper.appendChild(checkbox);
+            optionWrapper.appendChild(text);
+            checkboxGroup.appendChild(optionWrapper);
+          });
+          wrapper.appendChild(checkboxGroup);
+        }
+
+        if (item.type === 'SCALE' && item.scale) {
+          var scaleOptions = document.createElement('div');
+          scaleOptions.className = 'scale-options';
+          for (var value = item.scale.lower; value <= item.scale.upper; value += 1) {
+            var scaleWrapper = document.createElement('div');
+            scaleWrapper.className = 'scale-button';
+
+            var scaleInput = document.createElement('input');
+            scaleInput.type = 'radio';
+            scaleInput.name = 'entry.' + item.id;
+            scaleInput.value = String(value);
+            scaleInput.id = 'scale-' + item.id + '-' + value;
+            if (item.required) {
+              scaleInput.required = true;
+            }
+
+            var scaleLabel = document.createElement('label');
+            scaleLabel.setAttribute('for', scaleInput.id);
+            scaleLabel.textContent = value;
+
+            scaleWrapper.appendChild(scaleInput);
+            scaleWrapper.appendChild(scaleLabel);
+            scaleOptions.appendChild(scaleWrapper);
+          }
+          wrapper.appendChild(scaleOptions);
+
+          var scaleLabels = document.createElement('div');
+          scaleLabels.className = 'scale-labels';
+          scaleLabels.innerHTML = '<span>' + (item.scale.leftLabel || '') + '</span><span>' + (item.scale.rightLabel || '') + '</span>';
+          wrapper.appendChild(scaleLabels);
+        }
+
+        if (['TEXT', 'PARAGRAPH_TEXT', 'MULTIPLE_CHOICE', 'CHECKBOX', 'SCALE'].indexOf(item.type) === -1) {
+          var warning = document.createElement('div');
+          warning.className = 'help-text';
+          warning.textContent = '此題型尚未支援，請改用原始 Google Form 作答。';
+          wrapper.appendChild(warning);
+        }
+
+        return wrapper;
+      }
+
+      function renderForm(formData) {
+        formDefinition = formData;
+        formContainer.innerHTML = '';
+        document.getElementById('formTitle').textContent = formData.title || '問卷';
+        document.getElementById('formDescription').textContent = formData.description || '';
+
+        formData.items.forEach(function (item) {
+          formContainer.appendChild(createQuestionElement(item));
+        });
+
+        formCard.classList.remove('hidden');
+      }
+
+      loadButton.addEventListener('click', function () {
+        var formUrl = document.getElementById('formUrl').value.trim();
+        clearStatus(loadStatus);
+        clearStatus(submitStatus);
+        formCard.classList.add('hidden');
+        if (!formUrl) {
+          setStatus(loadStatus, '請輸入 Google Form 連結。', 'error');
+          return;
+        }
+        setStatus(loadStatus, '讀取中...', '');
+        google.script.run
+          .withSuccessHandler(function (data) {
+            renderForm(data);
+            setStatus(loadStatus, '已完成讀取，請開始填寫。', 'success');
+          })
+          .withFailureHandler(function (error) {
+            setStatus(loadStatus, '讀取失敗：' + error.message, 'error');
+          })
+          .getFormDefinition(formUrl);
+      });
+
+      submitButton.addEventListener('click', function () {
+        clearStatus(submitStatus);
+        if (!formDefinition) {
+          setStatus(submitStatus, '尚未載入問卷。', 'error');
+          return;
+        }
+
+        var requiredInvalid = formContainer.querySelector(':invalid');
+        if (requiredInvalid) {
+          requiredInvalid.reportValidity();
+          return;
+        }
+
+        var data = {};
+        formDefinition.items.forEach(function (item) {
+          var entryName = 'entry.' + item.id;
+          if (item.type === 'CHECKBOX') {
+            var checkboxes = formContainer.querySelectorAll('input[name="' + entryName + '"]:checked');
+            data[entryName] = Array.prototype.slice.call(checkboxes).map(function (checkbox) {
+              return checkbox.value;
+            });
+            return;
+          }
+
+          var input = formContainer.querySelector('[name="' + entryName + '"]:checked, [name="' + entryName + '"]');
+          if (!input) {
+            return;
+          }
+          data[entryName] = input.value;
+        });
+
+        setStatus(submitStatus, '送出中...', '');
+        google.script.run
+          .withSuccessHandler(function (response) {
+            if (response.status >= 200 && response.status < 400) {
+              setStatus(submitStatus, '已送出！謝謝填寫。', 'success');
+              formContainer.reset();
+            } else {
+              setStatus(submitStatus, '送出失敗，請稍後再試。', 'error');
+            }
+          })
+          .withFailureHandler(function (error) {
+            setStatus(submitStatus, '送出失敗：' + error.message, 'error');
+          })
+          .submitResponse(document.getElementById('formUrl').value.trim(), data);
+      });
+    </script>
+  </body>
+</html>
